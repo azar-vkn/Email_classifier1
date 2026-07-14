@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Email Spam & Phishing Classifier — paste an email or sign in with Google to scan your inbox for spam and phishing.">
+    <title>Email Classifier - Spam & Phishing Detector</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Google Identity Services SDK -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">&#x1F6E1;&#xFE0F;</span>
+                <div>
+                    <h1>Email Classifier</h1>
+                    <p class="subtitle">Spam & Phishing Detector</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="paste" onclick="switchTab('paste')">
+                <span class="tab-icon">&#x1F4DD;</span>
+                Paste Email
+            </button>
+            <button class="tab-btn" data-tab="scan" onclick="switchTab('scan')">
+                <span class="tab-icon">&#x1F4EC;</span>
+                Scan Inbox
+            </button>
+        </nav>
+
+        <!-- ============================================================= -->
+        <!-- TAB 1: Paste Email                                            -->
+        <!-- ============================================================= -->
+        <main id="tab-paste" class="tab-content active">
+            <section class="input-section">
+                <label for="email-input" class="input-label">Paste your email below</label>
+                <textarea
+                    id="email-input"
+                    class="email-textarea"
+                    placeholder="Dear user, your account has been temporarily suspended due to unusual activity. Please click the link below to verify your identity and restore access to your account immediately..."
+                    rows="10"
+                ></textarea>
+                <div class="button-row">
+                    <button id="classify-btn" class="classify-btn" onclick="classifyEmail()">
+                        <span class="btn-icon">&#x1F50D;</span>
+                        Classify Email
+                    </button>
+                    <button id="clear-btn" class="clear-btn" onclick="clearAll()">
+                        Clear
+                    </button>
+                </div>
+            </section>
+
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Analyzing email...</p>
+            </div>
+
+            <section id="result-card" class="result-card hidden">
+                <div id="result-badge" class="result-badge">
+                    <span id="result-icon" class="result-icon"></span>
+                    <span id="result-label" class="result-label"></span>
+                </div>
+                <div class="result-details">
+                    <div class="confidence-row">
+                        <span class="detail-title">Confidence</span>
+                        <div class="confidence-bar-container">
+                            <div id="confidence-bar" class="confidence-bar"></div>
+                        </div>
+                        <span id="confidence-value" class="confidence-value"></span>
+                    </div>
+                    <div class="flagged-words-section">
+                        <span class="detail-title">&#x1F6A9; Flagged Words & Features</span>
+                        <div id="flagged-words" class="flagged-words"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="highlighted-preview" class="highlighted-preview hidden">
+                <h3>Email Analysis</h3>
+                <div id="highlighted-text" class="highlighted-text"></div>
+            </section>
+        </main>
+
+        <!-- ============================================================= -->
+        <!-- TAB 2: Scan Inbox                                             -->
+        <!-- ============================================================= -->
+        <main id="tab-scan" class="tab-content">
+
+            <!-- ===== Google Sign-In Section ===== -->
+            <section id="google-signin-section" class="google-signin-section">
+                <div class="signin-hero">
+                    <div class="signin-hero-icon">
+                        <svg viewBox="0 0 48 48" width="48" height="48">
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                        </svg>
+                    </div>
+                    <h2 class="signin-title">Scan Your Gmail Inbox</h2>
+                    <p class="signin-subtitle">Sign in with Google to securely scan your recent emails for spam and phishing threats. We only request read-only access.</p>
+
+                    <button id="google-signin-btn" class="google-signin-btn" onclick="initiateGoogleSignIn()">
+                        <svg viewBox="0 0 48 48" width="20" height="20">
+                            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                        </svg>
+                        Sign in with Google
+                    </button>
+
+                    <div class="signin-email-count">
+                        <label for="google-scan-count" class="form-label">Emails to scan</label>
+                        <select id="google-scan-count" class="form-select form-select-sm">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="signin-security-note">
+                    <span>&#x1F512;</span>
+                    <span>Read-only access via Google OAuth 2.0. We never see your password. <a href="https://developers.google.com/identity/protocols/oauth2" target="_blank" rel="noopener">Learn more</a></span>
+                </div>
+            </section>
+
+            <!-- ===== Signed-In User Profile ===== -->
+            <section id="google-profile-section" class="google-profile-section hidden">
+                <div class="profile-card">
+                    <div class="profile-info">
+                        <img id="google-avatar" class="profile-avatar" src="" alt="Profile" width="40" height="40">
+                        <div>
+                            <div id="google-name" class="profile-name"></div>
+                            <div id="google-email" class="profile-email"></div>
+                        </div>
+                    </div>
+                    <button class="signout-btn" onclick="googleSignOut()">Sign out</button>
+                </div>
+            </section>
+
+            <!-- ===== OR Divider ===== -->
+            <div class="or-divider">
+                <span>or use email & password</span>
+            </div>
+
+            <!-- ===== Manual IMAP Login (collapsed by default) ===== -->
+            <details class="imap-details">
+                <summary class="imap-summary">Connect with IMAP (Outlook, Yahoo, Custom)</summary>
+
+                <section class="scan-login-section">
+                    <div class="security-banner">
+                        <span class="banner-icon">&#x1F512;</span>
+                        <div>
+                            <strong>Your credentials are secure</strong>
+                            <p>Passwords are sent only to your email provider over SSL. They are never stored on disk or logged. Gmail users: use an <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">App Password</a>.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="scan-email" class="form-label">Email Address</label>
+                        <input type="email" id="scan-email" class="form-input" placeholder="your.email@outlook.com" autocomplete="email">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="scan-password" class="form-label">
+                            Password / App Password
+                        </label>
+                        <div class="password-wrapper">
+                            <input type="password" id="scan-password" class="form-input" placeholder="Enter password" autocomplete="current-password">
+                            <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" aria-label="Show password">&#x1F441;&#xFE0F;</button>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="scan-provider" class="form-label">Email Provider</label>
+                            <select id="scan-provider" class="form-select" onchange="onProviderChange()">
+                                <option value="gmail">Gmail</option>
+                                <option value="outlook" selected>Outlook / Hotmail</option>
+                                <option value="yahoo">Yahoo Mail</option>
+                                <option value="custom">Custom IMAP</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="scan-count" class="form-label">Emails to Scan</label>
+                            <select id="scan-count" class="form-select">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="custom-host-group" class="form-group hidden">
+                        <label for="scan-custom-host" class="form-label">IMAP Server Host</label>
+                        <input type="text" id="scan-custom-host" class="form-input" placeholder="imap.example.com">
+                    </div>
+
+                    <div class="button-row">
+                        <button id="scan-btn" class="classify-btn" onclick="scanInbox()">
+                            <span class="btn-icon">&#x1F4EC;</span>
+                            Connect & Scan
+                        </button>
+                        <button id="test-conn-btn" class="clear-btn" onclick="testConnection()">
+                            Test Connection
+                        </button>
+                    </div>
+
+                    <div id="conn-status" class="conn-status hidden"></div>
+                </section>
+            </details>
+
+            <!-- ===== Scan Loading ===== -->
+            <div id="scan-loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p id="scan-loading-text">Connecting to inbox...</p>
+            </div>
+
+            <!-- ===== Scan Results ===== -->
+            <section id="scan-results" class="scan-results hidden">
+                <div class="scan-summary">
+                    <h2 class="section-title">Scan Results</h2>
+                    <div class="summary-stats">
+                        <div class="stat-card stat-total">
+                            <span class="stat-number" id="stat-total">0</span>
+                            <span class="stat-label">Total</span>
+                        </div>
+                        <div class="stat-card stat-ham">
+                            <span class="stat-number" id="stat-ham">0</span>
+                            <span class="stat-label">Legitimate</span>
+                        </div>
+                        <div class="stat-card stat-spam">
+                            <span class="stat-number" id="stat-spam">0</span>
+                            <span class="stat-label">Spam</span>
+                        </div>
+                        <div class="stat-card stat-phishing">
+                            <span class="stat-number" id="stat-phishing">0</span>
+                            <span class="stat-label">Phishing</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-bar">
+                    <button class="filter-btn active" data-filter="all" onclick="filterResults('all')">All</button>
+                    <button class="filter-btn" data-filter="ham" onclick="filterResults('ham')">Legitimate</button>
+                    <button class="filter-btn" data-filter="spam" onclick="filterResults('spam')">Spam</button>
+                    <button class="filter-btn" data-filter="phishing" onclick="filterResults('phishing')">Phishing</button>
+                </div>
+
+                <div id="email-cards-list" class="email-cards-list"></div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>College Project -- Email Spam & Phishing Classifier -- Built with scikit-learn & Flask</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
