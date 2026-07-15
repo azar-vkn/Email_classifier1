@@ -1015,34 +1015,38 @@ body {
     justify-content: center;
     gap: var(--space-md);
     padding: 14px 32px;
-    background: #fff;
-    color: #3c4043;
-    border: 1px solid #dadce0;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: var(--radius-xl);
-    font-family: 'Inter', 'Roboto', sans-serif;
-    font-size: 0.95rem;
+    font-family: var(--font-primary);
+    font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
     transition: all var(--transition-normal);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-    min-width: 240px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    min-width: 260px;
+    backdrop-filter: blur(12px);
+    letter-spacing: 0.02em;
 }
 
 .google-signin-btn:hover {
-    background: #f8f9fa;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
 }
 
 .google-signin-btn:active {
     transform: translateY(0);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .google-signin-btn:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+    box-shadow: none;
 }
 
 /* Email count selector in sign-in hero */
