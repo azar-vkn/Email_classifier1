@@ -23,6 +23,10 @@
                     <p class="subtitle">Spam & Phishing Detector</p>
                 </div>
             </div>
+            <div id="ai-status" class="ai-status-badge loading" title="Checking AI model...">
+                <span class="ai-status-dot"></span>
+                <span class="ai-status-text">Checking AI...</span>
+            </div>
         </header>
 
         <!-- Tab Navigation -->
@@ -87,6 +91,7 @@
 
             <section id="highlighted-preview" class="highlighted-preview hidden">
                 <h3>Email Analysis</h3>
+                <div id="model-source" class="model-source hidden"></div>
                 <div id="highlighted-text" class="highlighted-text"></div>
             </section>
         </main>
@@ -267,7 +272,7 @@
 
         <!-- Footer -->
         <footer class="footer">
-            <p>College Project -- Email Spam & Phishing Classifier -- Built with scikit-learn & Flask</p>
+            <p>College Project — Email Spam & Phishing Classifier — Powered by <a href="https://huggingface.co/facebook/bart-large-mnli" target="_blank" rel="noopener" style="color:var(--accent-blue);text-decoration:none">Hugging Face Transformers</a> & Flask</p>
         </footer>
     </div>
 

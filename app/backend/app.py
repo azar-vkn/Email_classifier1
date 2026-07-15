@@ -38,6 +38,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 sys.path.insert(0, PROJECT_ROOT)
 
 from src.predict import predict_email
+from src.ai_classifier import is_model_loaded as ai_model_loaded, get_model_status
 from src.email_fetcher import connect_imap, fetch_recent_emails, disconnect, IMAP_PROVIDERS
 from src.gmail_fetcher import fetch_gmail_emails
 
@@ -73,11 +74,17 @@ def health_check():
     """Health check endpoint to verify the API and model are running.
 
     Returns:
-        JSON with server status and whether the model is loaded.
+        JSON with server status, AI model status, and sklearn model status.
     """
     model_path = os.path.join(PROJECT_ROOT, "models", "best_model.joblib")
-    model_loaded = os.path.exists(model_path)
-    return jsonify({"status": "ok", "model_loaded": model_loaded})
+    sklearn_loaded = os.path.exists(model_path)
+    ai_status = get_model_status()
+    return jsonify({
+        "status": "ok",
+        "model_loaded": sklearn_loaded or ai_status["loaded"],
+        "ai_model": ai_status,
+        "sklearn_model_loaded": sklearn_loaded,
+    })
 
 
 @app.route("/predict", methods=["POST"])
@@ -106,12 +113,15 @@ def predict():
     try:
         result = predict_email(data["email_text"])
         if result is None:
-            return jsonify({"error": "Model not loaded. Train the model first."}), 500
+            # AI model not available, fall back to rule-based
+            result = _rule_based_classify(data["email_text"])
+            result["model"] = "rule_based"
 
         return jsonify({
             "label": result["label"],
             "confidence": round(result["confidence"], 4),
             "flagged_words": result.get("top_contributing_words", []),
+            "model_used": result.get("model", "unknown"),
         })
     except Exception as e:
         return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
@@ -286,6 +296,7 @@ def scan_inbox():
                                                 prediction.get("flagged_words", [])),
                 "snippet": email_data.get("snippet", ""),
                 "body": email_body,
+                "model_used": prediction.get("model", "rule_based"),
             })
 
         return jsonify({
@@ -376,6 +387,7 @@ def scan_inbox_google():
                                                 prediction.get("flagged_words", [])),
                 "snippet": email_data.get("snippet", ""),
                 "body": email_body,
+                "model_used": prediction.get("model", "rule_based"),
             })
 
         return jsonify({
@@ -467,13 +479,18 @@ def _rule_based_classify(text: str) -> dict:
 if __name__ == "__main__":
     print("=" * 60)
     print("  Email Classifier API")
+    print("  Powered by Hugging Face Transformers (BART-Large-MNLI)")
     print("=" * 60)
     print("Server starting on http://localhost:5000")
     print("Endpoints:")
     print("  POST /predict                    - classify an email")
     print("  POST /scan-inbox                 - scan inbox emails")
     print("  POST /scan-inbox/test-connection - test IMAP credentials")
+    print("  POST /scan-inbox/google          - scan Gmail via OAuth")
     print("  GET  /health                     - check server status")
+    print("")
+    print("AI Model: facebook/bart-large-mnli (zero-shot classification)")
+    print("Fallback: Rule-based keyword classifier")
     print("=" * 60)
 
     app.run(host="0.0.0.0", port=5000, debug=True)

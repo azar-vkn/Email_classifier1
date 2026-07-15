@@ -43,6 +43,20 @@ URGENCY_KEYWORDS = [
     "reset your password", "locked", "validate", "deactivated",
 ]
 
+# Ensure NLTK data is available
+try:
+    stopwords.words("english")
+except LookupError:
+    nltk.download("stopwords", quiet=True)
+
+try:
+    word_tokenize("test")
+except LookupError:
+    nltk.download("punkt", quiet=True)
+    nltk.download("punkt_tab", quiet=True)
+
+_STOP_WORDS = set(stopwords.words("english"))
+
 # ---------------------------------------------------------------------------
 # Text Cleaning
 # ---------------------------------------------------------------------------
@@ -57,8 +71,14 @@ def strip_html(text: str) -> str:
     Returns:
         Plain-text version of the input with all HTML tags removed.
     """
-    # TODO: implement using BeautifulSoup
-    pass
+    if not text:
+        return ""
+    try:
+        soup = BeautifulSoup(text, "html.parser")
+        return soup.get_text(separator=" ", strip=True)
+    except Exception:
+        # Fallback: regex-based HTML stripping
+        return re.sub(r"<[^>]+>", " ", text)
 
 
 def clean_text(text: str) -> str:
@@ -80,8 +100,35 @@ def clean_text(text: str) -> str:
     Returns:
         Cleaned, whitespace-joined string of tokens.
     """
-    # TODO: implement the full cleaning pipeline
-    pass
+    if not text or not isinstance(text, str):
+        return ""
+
+    # Step 1: Strip HTML tags
+    text = strip_html(text)
+
+    # Step 2: Lowercase
+    text = text.lower()
+
+    # Step 3: Remove URLs (replace with token 'URL')
+    text = re.sub(r"https?://\S+|www\.\S+", " URL ", text)
+
+    # Step 4: Remove email addresses (replace with token 'EMAIL')
+    text = re.sub(r"\S+@\S+\.\S+", " EMAIL ", text)
+
+    # Step 5: Remove punctuation and special characters
+    text = re.sub(r"[^a-zA-Z\s]", " ", text)
+
+    # Step 6: Tokenize
+    try:
+        tokens = word_tokenize(text)
+    except Exception:
+        tokens = text.split()
+
+    # Step 7: Remove stopwords and short tokens
+    tokens = [t for t in tokens if t not in _STOP_WORDS and len(t) > 1]
+
+    # Step 8: Rejoin tokens
+    return " ".join(tokens)
 
 
 # ---------------------------------------------------------------------------
@@ -98,8 +145,10 @@ def count_urls(text: str) -> int:
     Returns:
         Integer count of URLs found.
     """
-    # TODO: use regex to find http(s):// and www. patterns
-    pass
+    if not text:
+        return 0
+    urls = re.findall(r"https?://\S+|www\.\S+", text)
+    return len(urls)
 
 
 def has_ip_url(text: str) -> int:
@@ -113,8 +162,11 @@ def has_ip_url(text: str) -> int:
     Returns:
         1 if an IP-based URL is found, 0 otherwise.
     """
-    # TODO: regex for IP-address URLs
-    pass
+    if not text:
+        return 0
+    # Match URLs containing IP addresses (e.g., http://192.168.1.1/...)
+    ip_url_pattern = r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    return 1 if re.search(ip_url_pattern, text) else 0
 
 
 def count_urgency_keywords(text: str) -> int:
@@ -128,8 +180,13 @@ def count_urgency_keywords(text: str) -> int:
     Returns:
         Total count of urgency keyword matches.
     """
-    # TODO: iterate over URGENCY_KEYWORDS and sum occurrences
-    pass
+    if not text:
+        return 0
+    text_lower = text.lower()
+    count = 0
+    for keyword in URGENCY_KEYWORDS:
+        count += text_lower.count(keyword)
+    return count
 
 
 def excessive_caps_ratio(text: str) -> float:
@@ -143,8 +200,13 @@ def excessive_caps_ratio(text: str) -> float:
     Returns:
         Float between 0 and 1 representing the uppercase ratio.
     """
-    # TODO: compute uppercase / total alpha characters
-    pass
+    if not text:
+        return 0.0
+    alpha_chars = [c for c in text if c.isalpha()]
+    if not alpha_chars:
+        return 0.0
+    upper_count = sum(1 for c in alpha_chars if c.isupper())
+    return upper_count / len(alpha_chars)
 
 
 def count_exclamation_marks(text: str) -> int:
@@ -156,8 +218,9 @@ def count_exclamation_marks(text: str) -> int:
     Returns:
         Integer count of '!' characters.
     """
-    # TODO: simple count
-    pass
+    if not text:
+        return 0
+    return text.count("!")
 
 
 def suspicious_sender_domain(sender: str) -> int:
@@ -175,8 +238,42 @@ def suspicious_sender_domain(sender: str) -> int:
     Returns:
         1 if the domain looks suspicious, 0 otherwise.
     """
-    # TODO: implement domain heuristics
-    pass
+    if not sender or "@" not in sender:
+        return 0
+
+    try:
+        domain = sender.split("@")[1].lower().strip()
+    except (IndexError, AttributeError):
+        return 0
+
+    # Check for IP-address domains
+    if re.match(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", domain):
+        return 1
+
+    # Check for unusually long domains (> 30 chars)
+    if len(domain) > 30:
+        return 1
+
+    # Check for many hyphens (> 2)
+    if domain.count("-") > 2:
+        return 1
+
+    # Check for many numbers in domain name
+    digit_count = sum(1 for c in domain.split(".")[0] if c.isdigit())
+    if digit_count >= 3:
+        return 1
+
+    # Check for look-alike domains (common typosquatting patterns)
+    lookalikes = [
+        "paypa1", "g00gle", "micr0soft", "amaz0n", "app1e",
+        "faceb00k", "netf1ix", "1inkedin", "twitt3r",
+    ]
+    domain_base = domain.split(".")[0]
+    for lookalike in lookalikes:
+        if lookalike in domain_base:
+            return 1
+
+    return 0
 
 
 def extract_features(text: str, sender: str = "") -> dict:
@@ -198,8 +295,14 @@ def extract_features(text: str, sender: str = "") -> dict:
             - 'exclamation_count'
             - 'suspicious_sender'
     """
-    # TODO: call each feature function and return a combined dict
-    pass
+    return {
+        "num_urls": count_urls(text),
+        "has_ip_url": has_ip_url(text),
+        "urgency_keyword_count": count_urgency_keywords(text),
+        "caps_ratio": round(excessive_caps_ratio(text), 4),
+        "exclamation_count": count_exclamation_marks(text),
+        "suspicious_sender": suspicious_sender_domain(sender),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +320,15 @@ def build_tfidf(corpus: list[str], max_features: int = 5000) -> tuple:
     Returns:
         Tuple of (tfidf_matrix, fitted_vectorizer).
     """
-    # TODO: fit TfidfVectorizer and return (matrix, vectorizer)
-    pass
+    vectorizer = TfidfVectorizer(
+        max_features=max_features,
+        ngram_range=(1, 2),
+        min_df=2,
+        max_df=0.95,
+        sublinear_tf=True,
+    )
+    tfidf_matrix = vectorizer.fit_transform(corpus)
+    return tfidf_matrix, vectorizer
 
 
 def transform_tfidf(texts: list[str], vectorizer: TfidfVectorizer):
@@ -231,8 +341,7 @@ def transform_tfidf(texts: list[str], vectorizer: TfidfVectorizer):
     Returns:
         Sparse TF-IDF matrix for the input texts.
     """
-    # TODO: vectorizer.transform(texts)
-    pass
+    return vectorizer.transform(texts)
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +366,22 @@ def preprocess_dataframe(df: pd.DataFrame, text_col: str = "text",
     Returns:
         Processed DataFrame ready for model training.
     """
-    # TODO: apply clean_text and extract_features across all rows
-    pass
+    result_df = df.copy()
+
+    # Step 1: Clean text
+    print("[INFO] Cleaning text...")
+    result_df["cleaned_text"] = result_df[text_col].apply(clean_text)
+
+    # Step 2: Extract engineered features
+    print("[INFO] Extracting features...")
+    features = result_df[text_col].apply(lambda t: extract_features(t, ""))
+    feature_df = pd.DataFrame(features.tolist())
+
+    # Combine cleaned text, features, and label
+    result_df = pd.concat([result_df[["cleaned_text", label_col]], feature_df], axis=1)
+
+    print(f"[INFO] Processed {len(result_df)} emails with {len(feature_df.columns)} engineered features.")
+    return result_df
 
 
 # ---------------------------------------------------------------------------
@@ -279,5 +402,25 @@ if __name__ == "__main__":
     RAW_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "raw")
     PROCESSED_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
 
-    # TODO: load CSV from RAW_DIR, call preprocess_dataframe, save to PROCESSED_DIR
-    print("[INFO] Preprocessing not yet implemented — stub only.")
+    # Find CSV files in raw directory
+    csv_files = [f for f in os.listdir(RAW_DIR) if f.endswith(".csv")]
+
+    if not csv_files:
+        print(f"[ERROR] No CSV files found in {RAW_DIR}")
+        print("        Place a CSV with 'text' and 'label' columns there.")
+        sys.exit(1)
+
+    # Load and process the first CSV found
+    input_path = os.path.join(RAW_DIR, csv_files[0])
+    print(f"[INFO] Loading: {input_path}")
+
+    df = pd.read_csv(input_path)
+    print(f"[INFO] Loaded {len(df)} rows from {csv_files[0]}")
+
+    processed_df = preprocess_dataframe(df)
+
+    # Save processed data
+    os.makedirs(PROCESSED_DIR, exist_ok=True)
+    output_path = os.path.join(PROCESSED_DIR, "processed_emails.csv")
+    processed_df.to_csv(output_path, index=False)
+    print(f"[INFO] Saved processed data to: {output_path}")

@@ -37,6 +37,15 @@ const confidenceValue = document.getElementById("confidence-value");
 const flaggedWordsEl = document.getElementById("flagged-words");
 const highlightedPreview = document.getElementById("highlighted-preview");
 const highlightedText = document.getElementById("highlighted-text");
+const modelSourceEl = document.getElementById("model-source");
+
+// ---------------------------------------------------------------------------
+// DOM Elements -- AI Status
+// ---------------------------------------------------------------------------
+
+const aiStatusBadge = document.getElementById("ai-status");
+const aiStatusDot = document.querySelector(".ai-status-dot");
+const aiStatusText = document.querySelector(".ai-status-text");
 
 // ---------------------------------------------------------------------------
 // DOM Elements -- Tab 2 (Scan Inbox)
@@ -157,6 +166,26 @@ function displayResult(data, originalText) {
         flaggedWordsEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.85rem">No suspicious words flagged</span>';
     }
     highlightedText.innerHTML = highlightWords(originalText, data.flagged_words || []);
+
+    // Show model source indicator
+    if (data.model_used) {
+        var modelNames = {
+            "ai": "\uD83E\uDD16 Classified by AI Model (BART-Large-MNLI)",
+            "sklearn": "\uD83D\uDCCA Classified by Trained ML Model",
+            "rule_based": "\uD83D\uDD27 Classified by Rule Engine (Fallback)",
+        };
+        var modelClasses = {
+            "ai": "model-ai",
+            "sklearn": "model-sklearn",
+            "rule_based": "model-rules",
+        };
+        modelSourceEl.textContent = modelNames[data.model_used] || data.model_used;
+        modelSourceEl.className = "model-source " + (modelClasses[data.model_used] || "");
+        modelSourceEl.classList.remove("hidden");
+    } else {
+        modelSourceEl.classList.add("hidden");
+    }
+
     resultCard.classList.remove("hidden");
     highlightedPreview.classList.remove("hidden");
 }
@@ -617,5 +646,40 @@ var shakeStyle = document.createElement("style");
 shakeStyle.textContent = "@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}";
 document.head.appendChild(shakeStyle);
 
-// Initialize Google Auth when page loads
-window.addEventListener("load", initGoogleAuth);
+// ---------------------------------------------------------------------------
+// AI Model Health Check
+// ---------------------------------------------------------------------------
+
+async function checkAIHealth() {
+    try {
+        var response = await fetch(API_URL + "/health");
+        if (!response.ok) throw new Error("Server not reachable");
+        var data = await response.json();
+
+        if (data.ai_model && data.ai_model.loaded) {
+            aiStatusBadge.className = "ai-status-badge online";
+            aiStatusBadge.title = "AI Model: " + data.ai_model.model_name;
+            aiStatusText.textContent = "AI Model Active";
+        } else if (data.model_loaded) {
+            aiStatusBadge.className = "ai-status-badge online";
+            aiStatusBadge.title = "ML Model loaded (sklearn)";
+            aiStatusText.textContent = "ML Model Active";
+        } else {
+            aiStatusBadge.className = "ai-status-badge fallback";
+            aiStatusBadge.title = "Using rule-based fallback classifier";
+            aiStatusText.textContent = "Rule Engine";
+        }
+    } catch (error) {
+        aiStatusBadge.className = "ai-status-badge offline";
+        aiStatusBadge.title = "Cannot connect to API server";
+        aiStatusText.textContent = "Offline";
+    }
+}
+
+// Initialize Google Auth and check AI health when page loads
+window.addEventListener("load", function() {
+    initGoogleAuth();
+    checkAIHealth();
+    // Re-check periodically (every 30 seconds)
+    setInterval(checkAIHealth, 30000);
+});

@@ -2,14 +2,12 @@
 predict.py — Load Saved Model & Predict on New Emails
 
 Provides a predict_email() function that:
-    1. Cleans the input text
-    2. Extracts engineered features
-    3. Vectorizes with the saved TF-IDF vectorizer
-    4. Runs the saved model to produce a prediction
-    5. Returns the label, confidence score, and top contributing words/features
+    1. Tries the AI zero-shot classifier first (Hugging Face Transformers)
+    2. Falls back to the traditional ML model (if trained) 
+    3. Returns the label, confidence score, and top contributing words/features
 
 The "top contributing words" feature provides explainability by surfacing
-which TF-IDF terms or engineered features had the highest influence on the
+which terms or engineered features had the highest influence on the
 model's decision.
 
 Usage:
@@ -32,6 +30,7 @@ from scipy.sparse import hstack, csr_matrix
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.preprocessing import clean_text, extract_features
+from src.ai_classifier import predict_with_ai, is_model_loaded
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -64,13 +63,18 @@ def load_model(model_path: str = MODEL_PATH, vectorizer_path: str = VECTORIZER_P
         vectorizer_path: Path to the saved TF-IDF vectorizer .joblib file.
 
     Returns:
-        Tuple of (model, vectorizer).
-
-    Raises:
-        FileNotFoundError: If model or vectorizer files don't exist.
+        Tuple of (model, vectorizer), or (None, None) if files don't exist.
     """
-    # TODO: load with joblib and return
-    pass
+    if not os.path.exists(model_path) or not os.path.exists(vectorizer_path):
+        return None, None
+
+    try:
+        model = joblib.load(model_path)
+        vectorizer = joblib.load(vectorizer_path)
+        return model, vectorizer
+    except Exception as e:
+        print(f"[WARN] Failed to load trained model: {e}")
+        return None, None
 
 
 # ---------------------------------------------------------------------------
@@ -95,8 +99,20 @@ def prepare_features(text: str, vectorizer, sender: str = ""):
     Returns:
         Sparse feature matrix (1 × n_features) ready for model.predict().
     """
-    # TODO: clean → vectorize → extract features → hstack
-    pass
+    # Step 1: Clean the text
+    cleaned = clean_text(text)
+
+    # Step 2: Transform with TF-IDF vectorizer
+    tfidf_vector = vectorizer.transform([cleaned])
+
+    # Step 3: Extract engineered features
+    features = extract_features(text, sender)
+    feature_values = [features[name] for name in ENGINEERED_FEATURE_NAMES]
+    feature_matrix = csr_matrix([feature_values])
+
+    # Step 4: Horizontally stack
+    combined = hstack([tfidf_vector, feature_matrix])
+    return combined
 
 
 # ---------------------------------------------------------------------------
@@ -125,8 +141,44 @@ def get_top_contributing_words(
     Returns:
         List of strings: the top_n most influential words/features.
     """
-    # TODO: extract feature importance based on model type, return top words
-    pass
+    cleaned = clean_text(text)
+    tfidf_vector = vectorizer.transform([cleaned])
+
+    feature_names = vectorizer.get_feature_names_out()
+    n_tfidf_features = len(feature_names)
+
+    # Get feature importances based on model type
+    if hasattr(model, "coef_"):
+        # Linear model (Logistic Regression)
+        coefficients = model.coef_[predicted_class_idx]
+        tfidf_coefficients = coefficients[:n_tfidf_features]
+    elif hasattr(model, "feature_log_prob_"):
+        # Naive Bayes
+        log_probs = model.feature_log_prob_[predicted_class_idx]
+        tfidf_coefficients = log_probs[:n_tfidf_features]
+    elif hasattr(model, "feature_importances_"):
+        # Tree-based (Random Forest)
+        importances = model.feature_importances_[:n_tfidf_features]
+        tfidf_coefficients = importances
+    else:
+        return []
+
+    # Get non-zero entries in the TF-IDF vector
+    nonzero_indices = tfidf_vector.nonzero()[1]
+
+    if len(nonzero_indices) == 0:
+        return []
+
+    # Score each non-zero feature by its coefficient × TF-IDF value
+    scores = []
+    for idx in nonzero_indices:
+        if idx < n_tfidf_features:
+            score = abs(tfidf_coefficients[idx]) * tfidf_vector[0, idx]
+            scores.append((feature_names[idx], score))
+
+    # Sort by score descending and return top_n
+    scores.sort(key=lambda x: x[1], reverse=True)
+    return [word for word, _ in scores[:top_n]]
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +189,11 @@ def get_top_contributing_words(
 def predict_email(text: str, sender: str = "") -> dict:
     """Classify a single email and return prediction with explainability info.
 
+    Prediction priority:
+        1. AI model (Hugging Face zero-shot classification) — most accurate
+        2. Trained sklearn model (if available in /models) — fallback
+        3. Returns None if neither is available (app.py handles rule-based fallback)
+
     Args:
         text:   Raw email body text.
         sender: Sender email address (optional).
@@ -146,9 +203,44 @@ def predict_email(text: str, sender: str = "") -> dict:
             - 'label':       Predicted class ('ham', 'spam', or 'phishing')
             - 'confidence':  Float (0–1) representing prediction confidence
             - 'top_contributing_words': List of most influential words/features
+            - 'model':       'ai' or 'sklearn' indicating which model was used
+
+        Returns None if no model is available.
     """
-    # TODO: load model, prepare features, predict, get contributing words
-    pass
+    if not text or not text.strip():
+        return None
+
+    # Priority 1: Try AI model (zero-shot classification)
+    ai_result = predict_with_ai(text, sender=sender)
+    if ai_result is not None:
+        return ai_result
+
+    # Priority 2: Try trained sklearn model
+    model, vectorizer = load_model()
+    if model is not None and vectorizer is not None:
+        try:
+            X = prepare_features(text, vectorizer, sender=sender)
+            predicted_label = model.predict(X)[0]
+            probabilities = model.predict_proba(X)[0]
+
+            class_idx = list(model.classes_).index(predicted_label)
+            confidence = probabilities[class_idx]
+
+            top_words = get_top_contributing_words(
+                text, vectorizer, model, class_idx, top_n=10
+            )
+
+            return {
+                "label": predicted_label,
+                "confidence": float(confidence),
+                "top_contributing_words": top_words,
+                "model": "sklearn",
+            }
+        except Exception as e:
+            print(f"[WARN] sklearn prediction failed: {e}")
+
+    # No model available
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -170,5 +262,6 @@ if __name__ == "__main__":
         print(f"🏷️  Label:      {result['label']}")
         print(f"📊 Confidence: {result['confidence']:.2%}")
         print(f"🔍 Key words:  {', '.join(result['top_contributing_words'])}")
+        print(f"🤖 Model:      {result.get('model', 'unknown')}")
     else:
-        print("[ERROR] Prediction failed. Make sure the model is trained first.")
+        print("[ERROR] Prediction failed. No model available.")

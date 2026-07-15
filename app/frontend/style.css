@@ -23,6 +23,7 @@
     /* Accent colors */
     --accent-purple: #7c5cfc;
     --accent-purple-glow: rgba(124, 92, 252, 0.3);
+    --accent-blue: #60a5fa;
 
     /* Result colors */
     --color-ham: #34d399;
@@ -133,6 +134,108 @@ body {
     letter-spacing: 0.04em;
     text-transform: uppercase;
 }
+
+/* --- AI Status Badge (Header) --- */
+
+.ai-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-top: 0.75rem;
+    transition: all var(--transition-normal);
+    cursor: default;
+}
+
+.ai-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    transition: background var(--transition-normal);
+}
+
+/* Loading state */
+.ai-status-badge.loading {
+    background: rgba(160, 160, 184, 0.12);
+    color: var(--text-muted);
+    border: 1px solid rgba(160, 160, 184, 0.2);
+}
+.ai-status-badge.loading .ai-status-dot {
+    background: var(--text-muted);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Online / Active state */
+.ai-status-badge.online {
+    background: rgba(52, 211, 153, 0.1);
+    color: var(--color-ham);
+    border: 1px solid rgba(52, 211, 153, 0.25);
+}
+.ai-status-badge.online .ai-status-dot {
+    background: var(--color-ham);
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+}
+
+/* Fallback state */
+.ai-status-badge.fallback {
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--color-spam);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+}
+.ai-status-badge.fallback .ai-status-dot {
+    background: var(--color-spam);
+}
+
+/* Offline state */
+.ai-status-badge.offline {
+    background: rgba(248, 113, 113, 0.1);
+    color: var(--color-phishing);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+}
+.ai-status-badge.offline .ai-status-dot {
+    background: var(--color-phishing);
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 0.4; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* --- Model Source Indicator (Result Section) --- */
+
+.model-source {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.3rem 0.75rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.01em;
+}
+
+.model-source.model-ai {
+    background: linear-gradient(135deg, rgba(124, 92, 252, 0.12), rgba(160, 123, 250, 0.08));
+    color: #a78bfa;
+    border: 1px solid rgba(124, 92, 252, 0.2);
+}
+
+.model-source.model-sklearn {
+    background: rgba(52, 211, 153, 0.1);
+    color: var(--color-ham);
+    border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.model-source.model-rules {
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--color-spam);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
 
 /* ==========================================================================
    TAB NAVIGATION
